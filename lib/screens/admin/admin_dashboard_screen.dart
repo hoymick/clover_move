@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/admin_backend.dart';
 import '../../state/app_state.dart';
 import '../../theme/pack_icons.dart';
 import '../../theme/tokens.dart';
@@ -46,7 +47,12 @@ class AdminDashboardScreen extends StatelessWidget {
                 title: 'Admin',
                 subtitle: 'Clover Move Ireland',
                 action: 'Sign out',
-                onAction: () => context.read<AppState>().leaveAdminPreview(),
+                onAction: () async {
+                  await AdminBackend.signOut();
+                  if (context.mounted) {
+                    context.read<AppState>().leaveAdminPreview();
+                  }
+                },
               ),
             ),
           ),

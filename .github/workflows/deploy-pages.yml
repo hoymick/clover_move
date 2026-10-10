@@ -26,7 +26,10 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
-      - run: flutter build web --release --base-href /clover_move/
+      - run: >-
+          flutter build web --release --base-href /clover_move/
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_PUBLISHABLE_KEY="${{ secrets.SUPABASE_PUBLISHABLE_KEY }}"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web

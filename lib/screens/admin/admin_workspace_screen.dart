@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/admin_backend.dart';
 import '../../state/app_state.dart';
 import '../../theme/pack_icons.dart';
 import '../../theme/tokens.dart';
@@ -12,13 +13,59 @@ import '../../widgets/headers.dart';
 import '../../widgets/pack_icon.dart';
 import '../../widgets/scaffolds.dart';
 
-/// The deliberate local entry point for administration. It makes clear that
-/// this build has no server-side identity provider attached yet.
-class AdminAccessScreen extends StatelessWidget {
+/// The admin gateway becomes a real email/password sign-in as soon as the
+/// Supabase runtime values are supplied to the deployed app.
+class AdminAccessScreen extends StatefulWidget {
   const AdminAccessScreen({super.key});
 
   @override
+  State<AdminAccessScreen> createState() => _AdminAccessScreenState();
+}
+
+class _AdminAccessScreenState extends State<AdminAccessScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _submitting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      final allowed = await AdminBackend.signInAdmin(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+      if (!mounted) return;
+      if (allowed) {
+        context.read<AppState>().enterAdminPreview();
+      } else {
+        setState(() => _error = 'This account does not have admin access.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'We could not sign you in. Check your details and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final backendReady = AdminBackend.isConfigured;
     return Scaffold(
       backgroundColor: CloverColors.surfaceMuted,
       body: SafeArea(
@@ -49,51 +96,87 @@ class AdminAccessScreen extends StatelessWidget {
                   style: AppText.body,
                 ),
                 const Gap(24),
-                CloverCard(
-                  radius: 20,
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 10,
-                        runSpacing: 4,
-                        children: [
-                          const PackIcon(
-                            PackIcons.info,
-                            size: 19,
-                            color: CloverColors.orangeDark,
-                          ),
-                          Text(
-                            'Local admin preview',
-                            style: AppText.cardTitle.copyWith(fontSize: 14.5),
-                          ),
-                        ],
-                      ),
-                      const Gap(10),
-                      Text(
-                        'The workspace below uses sample data saved only while this app is open. Connect a secured backend before giving staff real access.',
-                        style: AppText.caption.copyWith(
-                          fontSize: 12,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
+                if (backendReady) ...[
+                  Text('Staff sign in', style: AppText.section),
+                  const Gap(12),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    decoration: const InputDecoration(labelText: 'Work email'),
                   ),
-                ),
-                const Gap(16),
-                PrimaryButton(
-                  label: 'Open admin preview',
-                  icon: PackIcons.shieldCheck,
-                  onPressed: () => context.read<AppState>().enterAdminPreview(),
-                ),
-                const Gap(14),
-                Text(
-                  'Production setup: connect Supabase or Firebase Authentication and database rules, then replace this local entry with role-based sign-in.',
-                  style: AppText.caption.copyWith(fontSize: 11.5, height: 1.4),
-                  textAlign: TextAlign.center,
-                ),
+                  const Gap(12),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                  ),
+                  if (_error != null) ...[
+                    const Gap(10),
+                    Text(
+                      _error!,
+                      style: AppText.caption.copyWith(color: CloverColors.red),
+                    ),
+                  ],
+                  const Gap(18),
+                  PrimaryButton(
+                    label: _submitting ? 'Signing in…' : 'Sign in securely',
+                    icon: PackIcons.lock,
+                    onPressed: _submitting ? null : _signIn,
+                  ),
+                ] else ...[
+                  CloverCard(
+                    radius: 20,
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const PackIcon(
+                              PackIcons.info,
+                              size: 19,
+                              color: CloverColors.orangeDark,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Admin preview',
+                                style: AppText.cardTitle.copyWith(
+                                  fontSize: 14.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Gap(10),
+                        Text(
+                          'The real staff sign-in and database connection are being configured. This preview uses sample data and does not grant production access.',
+                          style: AppText.caption.copyWith(
+                            fontSize: 12,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Gap(16),
+                  PrimaryButton(
+                    label: 'Open admin preview',
+                    icon: PackIcons.shieldCheck,
+                    onPressed: () =>
+                        context.read<AppState>().enterAdminPreview(),
+                  ),
+                  const Gap(14),
+                  Text(
+                    'The preview will be replaced by secure staff sign-in once the Supabase project is connected.',
+                    style: AppText.caption.copyWith(
+                      fontSize: 11.5,
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ],
             ),
           ),
