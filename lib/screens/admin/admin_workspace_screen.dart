@@ -259,9 +259,25 @@ class AdminManagementScreen extends StatelessWidget {
         detail: member.email,
         status: member.suspended ? 'Suspended' : 'Active',
         warning: member.suspended,
-        action: member.suspended ? 'Restore access' : 'Suspend',
+        action: state.isCurrentAdmin(member.id)
+            ? null
+            : member.suspended
+            ? 'Restore access'
+            : 'Suspend',
         onAction: () async {
-          await context.read<AppState>().toggleMemberSuspension(member.id);
+          try {
+            await context.read<AppState>().toggleMemberSuspension(member.id);
+          } catch (_) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Could not change account access. Your own admin account is protected.',
+                  ),
+                ),
+              );
+            }
+          }
         },
       ),
       const Gap(10),

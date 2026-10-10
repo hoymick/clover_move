@@ -368,6 +368,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> toggleMemberSuspension(String id) async {
+    if (isCurrentAdmin(id)) {
+      throw StateError('You cannot suspend your own administrator account.');
+    }
     final index = _members.indexWhere((member) => member.id == id);
     if (index == -1) return;
     final member = _members[index];
@@ -384,6 +387,9 @@ class AppState extends ChangeNotifier {
       rethrow;
     }
   }
+
+  bool isCurrentAdmin(String id) =>
+      usesLiveAdminData && AdminBackend.client.auth.currentUser?.id == id;
 
   Future<void> confirmPayment(String id) async {
     final index = _payments.indexWhere((payment) => payment.id == id);
