@@ -1,4 +1,4 @@
-name: Deploy admin preview
+name: Deploy Clover Move
 
 on:
   push:

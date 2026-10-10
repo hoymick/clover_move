@@ -77,8 +77,7 @@ class AdminDashboardScreen extends StatelessWidget {
                     SizedBox(width: 10),
                     Expanded(
                       child: _Stat(
-                        value:
-                            '${state.approvals.where((item) => item.status == AdminApprovalStatus.approved).length + 1204}',
+                        value: '${state.approvals.length}',
                         label: 'Routes',
                         colour: CloverColors.green,
                       ),
@@ -86,7 +85,8 @@ class AdminDashboardScreen extends StatelessWidget {
                     SizedBox(width: 10),
                     Expanded(
                       child: _Stat(
-                        value: '${state.members.length}',
+                        value:
+                            '${state.members.where((member) => member.role == 'Partner').length}',
                         label: 'Partners',
                         colour: Color(0xFF5A6B63),
                       ),
@@ -103,7 +103,14 @@ class AdminDashboardScreen extends StatelessWidget {
                   ],
                 ),
                 const Gap(12),
-                if (pending.isEmpty)
+                if (state.adminLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (state.adminLoadError != null)
+                  _AdminLoadError(message: state.adminLoadError!)
+                else if (pending.isEmpty)
                   const _EmptyApprovals()
                 else
                   for (var index = 0; index < pending.length; index++)
@@ -116,15 +123,16 @@ class AdminDashboardScreen extends StatelessWidget {
                         colour: index.isEven
                             ? CloverColors.orange
                             : CloverColors.green,
-                        onApprove: () =>
+                        onApprove: () async =>
                             context.read<AppState>().decideApproval(
                               pending[index].id,
                               AdminApprovalStatus.approved,
                             ),
-                        onReject: () => context.read<AppState>().decideApproval(
-                          pending[index].id,
-                          AdminApprovalStatus.rejected,
-                        ),
+                        onReject: () async =>
+                            context.read<AppState>().decideApproval(
+                              pending[index].id,
+                              AdminApprovalStatus.rejected,
+                            ),
                         onView: () {
                           context.read<AppState>().selectApproval(
                             pending[index].id,
@@ -216,6 +224,21 @@ class _EmptyApprovals extends StatelessWidget {
       'You are all caught up. There are no routes waiting for a decision.',
       style: AppText.bodyStrong.copyWith(fontSize: 13),
     ),
+  );
+}
+
+class _AdminLoadError extends StatelessWidget {
+  const _AdminLoadError({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: CloverColors.orangeTint,
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Text(message, style: AppText.bodyStrong.copyWith(fontSize: 13)),
   );
 }
 

@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import '../models/app_language.dart';
 import '../models/leaf_category.dart';
+import '../services/admin_backend.dart';
+import '../services/admin_repository.dart';
 
 /// The moderation state used by the in-app Admin Workspace. It is deliberately
 /// held separately from the member-facing onboarding state so the UI can be
@@ -116,7 +118,9 @@ class AppState extends ChangeNotifier {
   String _deliveryAddress = '14 Oakfield Avenue, Dublin 6';
   String _pickupPoint = 'Talbot Hotel · Dublin 1';
   String? _activeApprovalId;
-  final List<AdminApproval> _approvals = [
+  bool _adminLoading = false;
+  String? _adminLoadError;
+  List<AdminApproval> _approvals = [
     const AdminApproval(
       id: 'route-morning',
       title: 'Morning Route',
@@ -151,7 +155,7 @@ class AppState extends ChangeNotifier {
       submittedAt: 'Yesterday, 16:22',
     ),
   ];
-  final List<AdminMember> _members = [
+  List<AdminMember> _members = [
     const AdminMember(
       id: 'member-andrea',
       name: 'Andrea Ní Bhriain',
@@ -174,7 +178,7 @@ class AppState extends ChangeNotifier {
       joined: '31 Aug 2026',
     ),
   ];
-  final List<AdminPayment> _payments = [
+  List<AdminPayment> _payments = [
     const AdminPayment(
       id: 'payment-1',
       title: 'Clover Move Autumn Walk',
@@ -197,6 +201,10 @@ class AppState extends ChangeNotifier {
   LeafCategory? get category => _category;
   bool get termsAccepted => _termsAccepted;
   bool get adminPreviewActive => _adminPreviewActive;
+  bool get adminLoading => _adminLoading;
+  String? get adminLoadError => _adminLoadError;
+  bool get usesLiveAdminData =>
+      AdminBackend.isConfigured && AdminBackend.client.auth.currentUser != null;
   StoreFulfilment get storeFulfilment => _storeFulfilment;
   String get deliveryAddress => _deliveryAddress;
   String get pickupPoint => _pickupPoint;
@@ -257,8 +265,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Opens the local admin workspace. This is a development-only access gate;
-  /// production credentials must be checked by a backend identity provider.
+  /// Opens the workspace after the secure access screen has authenticated staff.
   void enterAdminPreview() {
     _adminPreviewActive = true;
     notifyListeners();
@@ -274,26 +281,160 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void decideApproval(String id, AdminApprovalStatus status) {
+  Future<void> loadAdminData() async {
+    if (!usesLiveAdminData) return;
+    _adminLoading = true;
+    _adminLoadError = null;
+    notifyListeners();
+    try {
+      final snapshot = await AdminRepository.instance.load();
+      final profilesById = {
+        for (final profile in snapshot.profiles)
+          _string(profile, 'id'): profile,
+      };
+      _approvals = snapshot.routes.map((route) {
+        final owner = profilesById[_string(route, 'owner_id')];
+        final ownerName = owner == null
+            ? 'Clover Move host'
+            : _string(owner, 'full_name');
+        final ownerRole = owner == null
+            ? 'Host'
+            : _titleCase(_string(owner, 'role'));
+        return AdminApproval(
+          id: _string(route, 'id'),
+          title: _string(route, 'title'),
+          host: '$ownerName · $ownerRole',
+          type: _string(route, 'route_type'),
+          meetingPoint: _string(route, 'meeting_point'),
+          schedule: _string(route, 'schedule_text'),
+          restrictionReason: _string(
+            route,
+            'restriction_reason',
+            'No restriction declared.',
+          ),
+          submittedAt: _displayDate(_string(route, 'submitted_at')),
+          status: _approvalStatus(_string(route, 'approval_status')),
+        );
+      }).toList();
+      _members = snapshot.profiles.map((profile) {
+        return AdminMember(
+          id: _string(profile, 'id'),
+          name: _string(profile, 'full_name'),
+          email: _string(profile, 'email'),
+          role: _titleCase(_string(profile, 'role')),
+          joined: _displayDate(_string(profile, 'created_at')),
+          suspended: _string(profile, 'status') == 'suspended',
+        );
+      }).toList();
+      _payments = snapshot.orders.map((order) {
+        final payer = profilesById[_string(order, 'customer_id')];
+        final fulfilment = _titleCase(_string(order, 'fulfilment'));
+        return AdminPayment(
+          id: _string(order, 'id'),
+          title: 'Store order · $fulfilment',
+          payer: payer == null
+              ? 'Clover Move member'
+              : _string(payer, 'full_name'),
+          amount: (order['amount_cents'] as num?)?.toInt() ?? 0,
+          channel: 'Clover Move checkout',
+          createdAt: _displayDate(_string(order, 'created_at')),
+          confirmed: _string(order, 'payment_status') == 'confirmed',
+        );
+      }).toList();
+    } catch (_) {
+      _adminLoadError = 'Could not load the latest admin records.';
+    } finally {
+      _adminLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> decideApproval(String id, AdminApprovalStatus status) async {
     final index = _approvals.indexWhere((item) => item.id == id);
     if (index == -1) return;
     _approvals[index] = _approvals[index].copyWith(status: status);
     _activeApprovalId = null;
     notifyListeners();
+    if (!usesLiveAdminData) return;
+    try {
+      await AdminRepository.instance.decideRoute(
+        routeId: id,
+        decision: status.name,
+      );
+    } catch (_) {
+      await loadAdminData();
+      rethrow;
+    }
   }
 
-  void toggleMemberSuspension(String id) {
+  Future<void> toggleMemberSuspension(String id) async {
     final index = _members.indexWhere((member) => member.id == id);
     if (index == -1) return;
     final member = _members[index];
     _members[index] = member.copyWith(suspended: !member.suspended);
     notifyListeners();
+    if (!usesLiveAdminData) return;
+    try {
+      await AdminRepository.instance.setMemberStatus(
+        memberId: id,
+        suspended: !member.suspended,
+      );
+    } catch (_) {
+      await loadAdminData();
+      rethrow;
+    }
   }
 
-  void confirmPayment(String id) {
+  Future<void> confirmPayment(String id) async {
     final index = _payments.indexWhere((payment) => payment.id == id);
     if (index == -1) return;
     _payments[index] = _payments[index].copyWith(confirmed: true);
     notifyListeners();
+    if (!usesLiveAdminData) return;
+    try {
+      await AdminRepository.instance.confirmOrderPayment(id);
+    } catch (_) {
+      await loadAdminData();
+      rethrow;
+    }
+  }
+
+  static String _string(
+    Map<String, dynamic> value,
+    String key, [
+    String fallback = '',
+  ]) {
+    final text = value[key]?.toString().trim() ?? '';
+    return text.isEmpty ? fallback : text;
+  }
+
+  static AdminApprovalStatus _approvalStatus(String value) => switch (value) {
+    'approved' => AdminApprovalStatus.approved,
+    'rejected' => AdminApprovalStatus.rejected,
+    _ => AdminApprovalStatus.pending,
+  };
+
+  static String _titleCase(String value) => value.isEmpty
+      ? 'Member'
+      : '${value[0].toUpperCase()}${value.substring(1)}';
+
+  static String _displayDate(String value) {
+    final date = DateTime.tryParse(value)?.toLocal();
+    if (date == null) return value.isEmpty ? 'Recently' : value;
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 }

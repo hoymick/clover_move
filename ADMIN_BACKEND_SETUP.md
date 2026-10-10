@@ -1,25 +1,28 @@
-# Clover Move Admin Backend Setup
+# Clover Move Admin Panel
 
-The public preview is already live at
+The live staff sign-in is deployed at
 `https://hoymick.github.io/clover_move/#/admin-dashboard`.
 
-To turn that preview into the real staff-only Admin Panel, set up the Supabase
-project once. The app is already prepared for it.
+The production Supabase project, row-level security, staff audit trail, and
+GitHub Pages deployment are already connected. The only remaining setup action
+is choosing the first staff account.
 
-## 1. Create the project
+## 1. Create the first admin account
 
-Create a Supabase project for Clover Move, then in **SQL Editor** run
-[`supabase/schema.sql`](supabase/schema.sql). This creates secured profiles,
-routes, Meet Points, store orders, and audit logging with row-level security.
+In Supabase **Authentication**, create or invite the staff email address. The
+database automatically creates that person's standard member profile. Copy the
+user UUID, then run this SQL in the Supabase SQL Editor:
 
-## 2. Create the first admin account
+```sql
+update public.profiles
+set role = 'admin'
+where id = 'AUTH_USER_UUID';
+```
 
-In Supabase **Authentication**, invite the staff email address. Copy the new
-user's UUID, then run the final commented `insert into public.profiles` example
-at the bottom of `supabase/schema.sql`, replacing its placeholder UUID and
-email. That `admin` role is required to sign in.
+Only an active profile with role `admin` can pass the staff sign-in screen.
+The Flutter app cannot grant itself this role.
 
-## 3. Configure the browser deployment
+## 2. Deployment configuration
 
 In GitHub repository **Settings → Secrets and variables → Actions**, add:
 
@@ -29,11 +32,10 @@ In GitHub repository **Settings → Secrets and variables → Actions**, add:
 Never add `SUPABASE_SERVICE_ROLE_KEY` to GitHub Pages, the Flutter project, or
 the app. It can bypass row-level security and belongs only on a private server.
 
-Push any commit to `main` after adding the two values. GitHub Pages rebuilds
-automatically, and the preview replaces its local-entry button with staff email
-and password sign-in.
+Both GitHub Actions secrets are already set. Push any commit to `main` to
+rebuild GitHub Pages.
 
-## Local staff-preview build
+## Local staff build
 
 ```bash
 flutter run --dart-define=SCREEN=admin-dashboard \

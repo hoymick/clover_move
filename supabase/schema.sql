@@ -2,6 +2,11 @@
 -- Run this once in Supabase SQL Editor. The Flutter client uses only the
 -- publishable anon key; never add a service-role key to the mobile or web app.
 
+create extension if not exists pgcrypto with schema extensions;
+create schema private;
+revoke all on schema private from public;
+grant usage on schema private to authenticated;
+
 create type public.profile_role as enum ('member', 'host', 'partner', 'admin');
 create type public.account_status as enum ('active', 'suspended');
 create type public.approval_status as enum ('pending', 'approved', 'rejected');
@@ -16,7 +21,30 @@ create table public.profiles (
   created_at timestamptz not null default now()
 );
 
-create or replace function public.is_active_admin()
+-- Every Auth user gets a regular member profile. Staff elevation happens only
+-- through a server-side SQL action, never in the Flutter client.
+create or replace function private.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email, full_name)
+  values (
+    new.id,
+    coalesce(new.email, ''),
+    coalesce(new.raw_user_meta_data ->> 'full_name', split_part(coalesce(new.email, ''), '@', 1), 'Clover Move member')
+  );
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+create or replace function private.is_active_admin()
 returns boolean
 language sql
 stable
@@ -28,6 +56,12 @@ as $$
     where id = auth.uid() and role = 'admin' and status = 'active'
   );
 $$;
+
+-- `security definer` is required to avoid a recursive profiles RLS lookup;
+-- callers must still be signed in. The functions live outside the Data API.
+revoke all on function private.handle_new_user() from public, anon, authenticated;
+revoke all on function private.is_active_admin() from public, anon;
+grant execute on function private.is_active_admin() to authenticated;
 
 create table public.routes (
   id uuid primary key default gen_random_uuid(),
@@ -79,6 +113,12 @@ create table public.admin_audit_log (
   created_at timestamptz not null default now()
 );
 
+create index routes_owner_id_index on public.routes (owner_id);
+create index routes_reviewed_by_index on public.routes (reviewed_by);
+create index store_orders_customer_id_index on public.store_orders (customer_id);
+create index store_orders_meet_point_id_index on public.store_orders (meet_point_id);
+create index admin_audit_log_admin_id_index on public.admin_audit_log (admin_id);
+
 alter table public.profiles enable row level security;
 alter table public.routes enable row level security;
 alter table public.meet_points enable row level security;
@@ -86,38 +126,48 @@ alter table public.store_orders enable row level security;
 alter table public.admin_audit_log enable row level security;
 
 create policy "members can view their profile" on public.profiles
-  for select to authenticated using (id = auth.uid() or public.is_active_admin());
+  for select to authenticated using (id = (select auth.uid()) or private.is_active_admin());
 create policy "admins manage profiles" on public.profiles
-  for all to authenticated using (public.is_active_admin()) with check (public.is_active_admin());
+  for all to authenticated using (private.is_active_admin()) with check (private.is_active_admin());
 
 create policy "owners view their routes" on public.routes
-  for select to authenticated using (owner_id = auth.uid() or public.is_active_admin());
+  for select to authenticated using (owner_id = (select auth.uid()) or private.is_active_admin());
 create policy "owners create routes" on public.routes
-  for insert to authenticated with check (owner_id = auth.uid());
+  for insert to authenticated with check (owner_id = (select auth.uid()));
 create policy "owners edit pending routes" on public.routes
-  for update to authenticated using (owner_id = auth.uid() and approval_status = 'pending')
-  with check (owner_id = auth.uid() and approval_status = 'pending');
+  for update to authenticated using (owner_id = (select auth.uid()) and approval_status = 'pending')
+  with check (owner_id = (select auth.uid()) and approval_status = 'pending');
 create policy "admins moderate routes" on public.routes
-  for update to authenticated using (public.is_active_admin()) with check (public.is_active_admin());
+  for update to authenticated using (private.is_active_admin()) with check (private.is_active_admin());
 
 create policy "public can view active collection points" on public.meet_points
   for select to anon, authenticated using (active = true and collection_enabled = true);
 create policy "admins manage meet points" on public.meet_points
-  for all to authenticated using (public.is_active_admin()) with check (public.is_active_admin());
+  for all to authenticated using (private.is_active_admin()) with check (private.is_active_admin());
 
 create policy "customers view their orders" on public.store_orders
-  for select to authenticated using (customer_id = auth.uid() or public.is_active_admin());
+  for select to authenticated using (customer_id = (select auth.uid()) or private.is_active_admin());
 create policy "customers create their orders" on public.store_orders
-  for insert to authenticated with check (customer_id = auth.uid());
+  for insert to authenticated with check (customer_id = (select auth.uid()));
 create policy "admins manage orders" on public.store_orders
-  for all to authenticated using (public.is_active_admin()) with check (public.is_active_admin());
+  for all to authenticated using (private.is_active_admin()) with check (private.is_active_admin());
 
 create policy "admins view audit history" on public.admin_audit_log
-  for select to authenticated using (public.is_active_admin());
+  for select to authenticated using (private.is_active_admin());
 create policy "admins write audit history" on public.admin_audit_log
-  for insert to authenticated with check (admin_id = auth.uid() and public.is_active_admin());
+  for insert to authenticated with check (admin_id = (select auth.uid()) and private.is_active_admin());
+
+-- Explicit Data API privileges. RLS remains the authorization layer; no table
+-- becomes publicly writable merely because it is exposed to the API.
+grant usage on schema public to anon, authenticated;
+grant select on public.meet_points to anon;
+grant select, insert, update on public.profiles to authenticated;
+grant select, insert, update on public.routes to authenticated;
+grant select, insert, update on public.store_orders to authenticated;
+grant select, insert, update, delete on public.meet_points to authenticated;
+grant select, insert on public.admin_audit_log to authenticated;
 
 -- After inviting/creating the first staff account in Supabase Authentication,
 -- insert its Auth user UUID below and change role to admin:
--- insert into public.profiles (id, email, full_name, role)
--- values ('AUTH_USER_UUID', 'admin@clovermove.ie', 'Clover Move Admin', 'admin');
+-- update public.profiles set role = 'admin'
+-- where id = 'AUTH_USER_UUID';

@@ -169,8 +169,24 @@ class AdminReviewScreen extends StatelessWidget {
     );
   }
 
-  void _decide(BuildContext context, String id, AdminApprovalStatus status) {
-    context.read<AppState>().decideApproval(id, status);
+  Future<void> _decide(
+    BuildContext context,
+    String id,
+    AdminApprovalStatus status,
+  ) async {
+    try {
+      await context.read<AppState>().decideApproval(id, status);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save that decision. Try again.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(

@@ -47,7 +47,10 @@ class _AdminAccessScreenState extends State<AdminAccessScreen> {
       );
       if (!mounted) return;
       if (allowed) {
-        context.read<AppState>().enterAdminPreview();
+        final state = context.read<AppState>();
+        await state.loadAdminData();
+        if (!mounted) return;
+        state.enterAdminPreview();
       } else {
         setState(() => _error = 'This account does not have admin access.');
       }
@@ -257,8 +260,9 @@ class AdminManagementScreen extends StatelessWidget {
         status: member.suspended ? 'Suspended' : 'Active',
         warning: member.suspended,
         action: member.suspended ? 'Restore access' : 'Suspend',
-        onAction: () =>
-            context.read<AppState>().toggleMemberSuspension(member.id),
+        onAction: () async {
+          await context.read<AppState>().toggleMemberSuspension(member.id);
+        },
       ),
       const Gap(10),
     ],
@@ -268,7 +272,7 @@ class AdminManagementScreen extends StatelessWidget {
     _Summary(
       title: 'Moderation history',
       body:
-          'Every approval decision is retained in this local workspace for staff review.',
+          'Every approval decision is kept in the secured staff audit history.',
     ),
     const Gap(18),
     for (final item in state.approvals) ...[
@@ -311,7 +315,9 @@ class AdminManagementScreen extends StatelessWidget {
         action: payment.confirmed ? null : 'Confirm record',
         onAction: payment.confirmed
             ? null
-            : () => context.read<AppState>().confirmPayment(payment.id),
+            : () async {
+                await context.read<AppState>().confirmPayment(payment.id);
+              },
       ),
       const Gap(10),
     ],
