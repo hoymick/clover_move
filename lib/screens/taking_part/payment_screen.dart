@@ -47,14 +47,45 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   bool get _official => _paymentRoute == 0;
 
+  String get _statusLabel {
+    if (_official) return 'Payment Pending';
+    return switch (_method) {
+      0 => 'Payment Pending',
+      1 => 'Payment Arrangement — Pending',
+      2 => 'Awaiting Host Confirmation',
+      3 => 'Payment Pending',
+      _ => 'Booking Confirmed',
+    };
+  }
+
+  String get _hostGuidanceTitle => switch (_method) {
+    0 => '€10 — Pay on Site',
+    1 => 'Arrange payment directly',
+    2 => 'Host confirmation required',
+    3 => 'External payment',
+    _ => 'Free event · €0',
+  };
+
+  String get _hostGuidanceBody => switch (_method) {
+    0 =>
+      'Payment will be made directly to the host or organiser at the event. The status stays Payment Pending until the host confirms it.',
+    1 =>
+      'Use Clover Move Chat, Contact Host, WhatsApp or another contact option. Payment is arranged outside Clover Move.',
+    2 =>
+      'After you select “I Have Paid the Host”, the organiser can choose Confirm Payment or Payment Not Confirmed.',
+    3 =>
+      'You will be redirected to the organiser’s payment service. Clover Move does not process the transaction.',
+    _ => 'No payment is required. Join the event to confirm your booking.',
+  };
+
   String get _actionLabel {
     if (_official) return 'Pay €20.00 securely';
     return switch (_method) {
       0 => 'Reserve · pay on site',
       1 => 'Contact host',
-      2 => 'Notify host of payment',
+      2 => 'I Have Paid the Host',
       3 => 'Pay externally',
-      _ => 'Join free event',
+      _ => 'Join Event',
     };
   }
 
@@ -155,9 +186,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const Gap(6),
                       TotalRow(
                         label: 'Status',
-                        value: _official
-                            ? 'Payment pending'
-                            : (_method == 4 ? 'Free event' : 'Paid to host'),
+                        value: _statusLabel,
                         emphasis: true,
                       ),
                     ],
@@ -199,6 +228,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       onTap: () => setState(() => _method = i),
                     ),
                   ],
+                if (!_official) ...[
+                  const Gap(18),
+                  Callout(
+                    title: _hostGuidanceTitle,
+                    body: _hostGuidanceBody,
+                    icon: _method == 4 ? PackIcons.ticketTag : PackIcons.info,
+                    tint: CloverColors.orangeTint,
+                    iconColour: CloverColors.orangeDark,
+                  ),
+                ],
                 if (_official && _method == 2) ...[
                   const Gap(22),
                   const FieldLabel('Card number'),

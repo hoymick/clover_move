@@ -24,6 +24,12 @@ class UserDashboardScreen extends StatelessWidget {
     ('My Routes', '12 · 1 pending approval', PackIcons.route, '/empty-state'),
     ('My Events', '3 upcoming', PackIcons.calendar, '/official-event'),
     (
+      'Payment history',
+      'Methods, statuses and organiser payments',
+      PackIcons.card,
+      '/payment-history',
+    ),
+    (
       'My Smart Jerseys',
       '2 kits · 5 of 6 yours',
       PackIcons.jersey,
@@ -37,6 +43,12 @@ class UserDashboardScreen extends StatelessWidget {
     ),
     ('Tickets', '2 valid', PackIcons.ticket, '/ticket'),
     ('Orders', '4 completed', PackIcons.card, '/store-catalogue'),
+    (
+      'Account settings',
+      'Profile, sign-in details and account controls',
+      PackIcons.person,
+      '/account-settings',
+    ),
   ];
 
   @override
@@ -128,7 +140,7 @@ class _ProfileHeader extends StatelessWidget {
                             fontSize: 12.5,
                             color: const Color(0xFF8FB3B0),
                           ),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 10),
@@ -318,7 +330,7 @@ class _SectionRow extends StatelessWidget {
                 Text(
                   meta,
                   style: AppText.caption.copyWith(fontSize: 11),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],

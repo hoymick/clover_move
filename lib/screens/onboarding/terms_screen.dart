@@ -124,9 +124,10 @@ class _DocumentRow extends StatelessWidget {
     return CloverCard(
       onTap: () {},
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: SizedBox(
-        height: 92,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 92),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const IconTile(
               child: PackIcon(
@@ -144,7 +145,12 @@ class _DocumentRow extends StatelessWidget {
                 children: [
                   Text(title, style: AppText.cardTitle),
                   const SizedBox(height: 5),
-                  Text(meta, style: AppText.caption),
+                  Text(
+                    meta,
+                    style: AppText.caption,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),

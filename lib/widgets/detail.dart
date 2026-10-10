@@ -220,7 +220,7 @@ class SpecGrid extends StatelessWidget {
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],

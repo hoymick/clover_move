@@ -27,10 +27,11 @@ class CreateRouteScreen extends StatefulWidget {
 class _CreateRouteScreenState extends State<CreateRouteScreen> {
   static const _genders = ['Mixed', 'Women', 'Men', 'LGBTQIA+'];
   static const _paymentOptions = [
-    'Free event',
-    'Pay on site',
-    'Arrange with host',
-    'External link',
+    'Free',
+    'Pay on Site',
+    'Arrange Payment with Host',
+    'Confirm Payment with Host',
+    'External Payment Link',
   ];
 
   LeafCategory _category = LeafCategory.orange;
@@ -38,10 +39,17 @@ class _CreateRouteScreenState extends State<CreateRouteScreen> {
   int _price = 1;
   int _maxParticipants = 8;
   RangeValues _ages = const RangeValues(25, 40);
-  final _selectedPaymentOptions = <String>{'Pay on site'};
+  final _selectedPaymentOptions = <String>{'Pay on Site'};
+  final _priceController = TextEditingController(text: '10.00');
 
   Color get _accent =>
       _category == LeafCategory.white ? CloverColors.inkSoft : _category.colour;
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -194,7 +202,7 @@ class _CreateRouteScreenState extends State<CreateRouteScreen> {
                   ),
                 ),
                 const Gap(12),
-                const FieldLabel('Price for participants'),
+                const FieldLabel('Event price'),
                 Row(
                   children: [
                     _PriceToggle(
@@ -212,13 +220,24 @@ class _CreateRouteScreenState extends State<CreateRouteScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _PriceField(accent: _accent, enabled: _price == 1),
+                      child: _PriceField(
+                        accent: _accent,
+                        enabled: _price == 1,
+                        controller: _priceController,
+                      ),
                     ),
                   ],
                 ),
+                const Gap(8),
+                Text(
+                  _price == 0
+                      ? 'Free events are shown to participants as €0.'
+                      : 'You set this price. Participants can view it but cannot edit it.',
+                  style: AppText.caption.copyWith(fontSize: 11),
+                ),
                 const Gap(24),
                 const FieldLabel(
-                  'Payment methods',
+                  'Payment method',
                   trailing: 'Choose one or more',
                 ),
                 Wrap(
@@ -237,6 +256,16 @@ class _CreateRouteScreenState extends State<CreateRouteScreen> {
                       ),
                   ],
                 ),
+                if (_selectedPaymentOptions.contains(
+                  'External Payment Link',
+                )) ...[
+                  const Gap(16),
+                  const LabelledInput(
+                    label: 'External payment link',
+                    hint: 'https://payment.example.com',
+                    initialValue: 'https://',
+                  ),
+                ],
                 const Gap(24),
                 const FieldLabel('Route or event media'),
                 const MediaRequirementsPanel(subject: 'Route or event'),
@@ -244,7 +273,7 @@ class _CreateRouteScreenState extends State<CreateRouteScreen> {
                 const Callout(
                   title: 'Host payments stay separate',
                   body:
-                      'Clover Move can track the status, but participants pay the independent host directly.',
+                      'Clover Move does not receive the payment, set your price or process the transaction. The host collects payment directly; Clover Move only provides payment-status and reporting tools.',
                   icon: PackIcons.shieldCheck,
                 ),
               ],
@@ -459,10 +488,15 @@ class _PriceToggle extends StatelessWidget {
 }
 
 class _PriceField extends StatelessWidget {
-  const _PriceField({required this.accent, required this.enabled});
+  const _PriceField({
+    required this.accent,
+    required this.enabled,
+    required this.controller,
+  });
 
   final Color accent;
   final bool enabled;
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -485,10 +519,28 @@ class _PriceField extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Expanded(
-            child: Text(
-              enabled ? '10.00' : '—',
-              style: AppText.cardTitle.copyWith(fontSize: 15),
-            ),
+            child: enabled
+                ? TextField(
+                    controller: controller,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    textAlign: TextAlign.right,
+                    style: AppText.cardTitle.copyWith(fontSize: 15),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  )
+                : Text(
+                    '0.00',
+                    textAlign: TextAlign.right,
+                    style: AppText.cardTitle.copyWith(
+                      fontSize: 15,
+                      color: CloverColors.muted,
+                    ),
+                  ),
           ),
           Text(
             'per person',

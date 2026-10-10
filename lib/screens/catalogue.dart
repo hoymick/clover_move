@@ -17,6 +17,7 @@ import 'business/partner_venue_screen.dart';
 import 'business/plans_business_screen.dart';
 import 'business/sponsor_brand_screen.dart';
 import 'community/community_screen.dart';
+import 'community/account_settings_screen.dart';
 import 'community/invite_screen.dart';
 import 'community/notifications_screen.dart';
 import 'community/plans_screen.dart';
@@ -32,6 +33,7 @@ import 'onboarding/kit_access_screen.dart';
 import 'onboarding/terms_screen.dart';
 import 'onboarding/welcome_screen.dart';
 import 'jerseys/bag_screen.dart';
+import 'jerseys/store_checkout_screen.dart';
 import 'jerseys/claim_new_screen.dart';
 import 'jerseys/claim_screen.dart';
 import 'jerseys/gift_jersey_screen.dart';
@@ -51,6 +53,7 @@ import 'registry.dart';
 import 'taking_part/check_in_screen.dart';
 import 'taking_part/fully_booked_screen.dart';
 import 'taking_part/payment_screen.dart';
+import 'taking_part/payment_history_screen.dart';
 import 'taking_part/registration_screen.dart';
 import 'taking_part/reviews_screen.dart';
 import 'taking_part/ticket_screen.dart';
@@ -172,9 +175,16 @@ const screenSections = <ScreenSection>[
       ScreenEntry(
         code: '13',
         title: 'Payment',
-        blurb: 'Apple Pay, Google Pay, card',
+        blurb: 'Official and host payment options',
         path: 'payment',
         builder: _payment,
+      ),
+      ScreenEntry(
+        code: '13b',
+        title: 'Payment History',
+        blurb: 'Payment method and status by event',
+        path: 'payment-history',
+        builder: _paymentHistory,
       ),
       ScreenEntry(
         code: '14',
@@ -271,6 +281,13 @@ const screenSections = <ScreenSection>[
         builder: _bag,
       ),
       ScreenEntry(
+        code: '29b',
+        title: 'Store Checkout',
+        blurb: 'Delivery or Partner Meet Point collection',
+        path: 'store-checkout',
+        builder: _storeCheckout,
+      ),
+      ScreenEntry(
         code: '34',
         title: 'Orders',
         blurb: 'History & tracking',
@@ -358,6 +375,13 @@ const screenSections = <ScreenSection>[
         blurb: 'Logo in official colours on the token',
         path: 'user-dashboard',
         builder: _userDashboard,
+      ),
+      ScreenEntry(
+        code: '17b',
+        title: 'Account Settings',
+        blurb: 'Profile, account and deletion controls',
+        path: 'account-settings',
+        builder: _accountSettings,
       ),
       ScreenEntry(
         code: '18',
@@ -491,6 +515,7 @@ Widget _meetPoint(BuildContext _) => const MeetPointScreen();
 Widget _emptyState(BuildContext _) => const EmptyStateScreen();
 Widget _registration(BuildContext _) => const RegistrationScreen();
 Widget _payment(BuildContext _) => const PaymentScreen();
+Widget _paymentHistory(BuildContext _) => const PaymentHistoryScreen();
 Widget _ticket(BuildContext _) => const TicketScreen();
 Widget _checkIn(BuildContext _) => const CheckInScreen();
 Widget _reviews(BuildContext _) => const ReviewsScreen();
@@ -502,6 +527,7 @@ Widget _manageRoute(BuildContext _) => const ManageRouteScreen();
 Widget _changesNeeded(BuildContext _) => const ChangesNeededScreen();
 Widget _storeCatalogue(BuildContext _) => const StoreCatalogueScreen();
 Widget _userDashboard(BuildContext _) => const UserDashboardScreen();
+Widget _accountSettings(BuildContext _) => const AccountSettingsScreen();
 Widget _adminDashboard(BuildContext _) => const AdminDashboardScreen();
 Widget _adminReview(BuildContext _) => const AdminReviewScreen();
 Widget _requestDeclined(BuildContext _) => const RequestDeclinedScreen();
@@ -521,6 +547,7 @@ Widget _sponsorBrand(BuildContext _) => const SponsorBrandScreen();
 Widget _plansBusiness(BuildContext _) => const PlansBusinessScreen();
 Widget _jerseyKit(BuildContext _) => const JerseyKitScreen();
 Widget _bag(BuildContext _) => const BagScreen();
+Widget _storeCheckout(BuildContext _) => const StoreCheckoutScreen();
 Widget _orders(BuildContext _) => const OrdersScreen();
 Widget _smartJerseys(BuildContext _) => const SmartJerseysScreen();
 Widget _shareSelect(BuildContext _) => const ShareSelectScreen();

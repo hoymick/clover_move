@@ -1,41 +1,80 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
+import '../../state/app_state.dart';
 import '../../theme/pack_icons.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/buttons.dart';
+import '../../widgets/cards.dart';
 import '../../widgets/detail.dart';
 import '../../widgets/headers.dart';
 import '../../widgets/pack_icon.dart';
 import '../../widgets/scaffolds.dart';
+import 'admin_workspace_screen.dart';
 
-/// 44 Admin Review — the checks a route passes before publishing. Passed checks
-/// are ticked in green; the one needing a decision is flagged amber, with the
-/// host's stated reason underneath so the reviewer can judge it.
+/// A live moderation decision. Its action buttons update the shared workspace
+/// immediately so reviewers cannot accidentally approve the same item twice.
 class AdminReviewScreen extends StatelessWidget {
   const AdminReviewScreen({super.key});
 
-  static const _checks = [
-    ('Meet point is an approved venue', true),
-    ('Host has no open complaints', true),
-    ('Capacity within venue limit (8 of 120)', true),
-    ('Restricted to women aged 25–40', false),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    if (!state.adminPreviewActive) return const AdminAccessScreen();
+    final item = state.activeApproval;
+    if (item == null || item.status != AdminApprovalStatus.pending) {
+      return Scaffold(
+        backgroundColor: CloverColors.surfaceMuted,
+        body: Column(
+          children: [
+            const ColoredBox(
+              color: CloverColors.white,
+              child: SafeArea(
+                bottom: false,
+                child: BackHeader(
+                  title: 'Review route',
+                  subtitle: 'Moderation queue',
+                ),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(Insets.gutter),
+                  child: MessagePanel(
+                    title: 'Nothing waiting for review',
+                    body:
+                        'Every current route has a decision. New submissions will appear here.',
+                    icon: PackIcons.check,
+                  ),
+                ),
+              ),
+            ),
+            StickyBar(
+              child: PrimaryButton(
+                label: 'Back to dashboard',
+                onPressed: () => context.go('/admin-dashboard'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final requiresReason = item.restrictionReason.contains('Women-only');
     return Scaffold(
       backgroundColor: CloverColors.surfaceMuted,
       body: Column(
         children: [
-          const ColoredBox(
+          ColoredBox(
             color: CloverColors.white,
             child: SafeArea(
               bottom: false,
               child: BackHeader(
                 title: 'Review route',
-                subtitle: '1 of 18 pending',
+                subtitle: '${state.pendingApprovals.length} awaiting approval',
               ),
             ),
           ),
@@ -48,42 +87,53 @@ class AdminReviewScreen extends StatelessWidget {
                 24,
               ),
               children: [
-                _RouteCard(),
+                _RouteCard(item: item),
                 const Gap(28),
                 Text('Checks', style: AppText.section),
                 const Gap(12),
-                for (final (label, passed) in _checks)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _CheckRow(label: label, passed: passed),
-                  ),
-                const Gap(14),
-                const Callout(
-                  title: 'Needs a stated reason',
-                  body:
-                      'Gender and age limits need a stated reason before this '
-                      'can be published.',
-                  tint: CloverColors.orangeTint,
-                  icon: PackIcons.people,
-                  iconColour: CloverColors.orangeDark,
+                const _CheckRow(
+                  label: 'Meet point is an approved venue',
+                  passed: true,
                 ),
+                const Gap(8),
+                const _CheckRow(
+                  label: 'Host has no open complaints',
+                  passed: true,
+                ),
+                const Gap(8),
+                const _CheckRow(
+                  label: 'Capacity is within venue limit',
+                  passed: true,
+                ),
+                const Gap(8),
+                _CheckRow(
+                  label: requiresReason
+                      ? 'Restriction needs a recorded reason'
+                      : 'No restricted audience declared',
+                  passed: !requiresReason,
+                ),
+                if (requiresReason) ...[
+                  const Gap(14),
+                  const Callout(
+                    title: 'Reason recorded for review',
+                    body:
+                        'This route has an audience restriction. Confirm that the host reason is appropriate before publishing.',
+                    tint: CloverColors.orangeTint,
+                    icon: PackIcons.people,
+                    iconColour: CloverColors.orangeDark,
+                  ),
+                ],
                 const Gap(26),
                 Text(
-                  "Host's reason",
+                  'Host reason',
                   style: AppText.cardTitle.copyWith(fontSize: 13.5),
                 ),
                 const Gap(12),
-                Container(
-                  width: double.infinity,
+                CloverCard(
+                  radius: 16,
                   padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: CloverColors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: CloverColors.border),
-                  ),
                   child: Text(
-                    "Women-only session requested by the venue's members. Runs "
-                    'alongside a mixed class.',
+                    item.restrictionReason,
                     style: AppText.bodyStrong.copyWith(
                       fontSize: 12,
                       height: 1.5,
@@ -97,13 +147,18 @@ class AdminReviewScreen extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: SecondaryButton(label: 'Reject', onPressed: () {}),
+                  child: SecondaryButton(
+                    label: 'Reject',
+                    onPressed: () =>
+                        _decide(context, item.id, AdminApprovalStatus.rejected),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: PrimaryButton(
                     label: 'Approve',
-                    onPressed: () => context.push('/admin-dashboard'),
+                    onPressed: () =>
+                        _decide(context, item.id, AdminApprovalStatus.approved),
                   ),
                 ),
               ],
@@ -113,163 +168,152 @@ class AdminReviewScreen extends StatelessWidget {
       ),
     );
   }
-}
 
-class _RouteCard extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: CloverColors.white,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: CloverColors.border),
-      ),
-      child: Stack(
-        children: [
-          const Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 6,
-            child: ColoredBox(color: CloverColors.orange),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 20, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Morning Route',
-                  style: AppText.subtitle.copyWith(fontSize: 17),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  'Niamh L. · verified host · 38 routes',
-                  style: AppText.caption.copyWith(fontSize: 11.5),
-                ),
-                const SizedBox(height: 20),
-                const Row(
-                  children: [
-                    Expanded(
-                      child: _Fact(
-                        icon: PackIcons.pin,
-                        label: 'MEET POINT',
-                        value: 'Talbot Hotel',
-                      ),
-                    ),
-                    Expanded(
-                      child: _Fact(
-                        icon: PackIcons.clock,
-                        label: 'TIME',
-                        value: '07:00 – 09:00',
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+  void _decide(BuildContext context, String id, AdminApprovalStatus status) {
+    context.read<AppState>().decideApproval(id, status);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          status == AdminApprovalStatus.approved
+              ? 'Route approved and published'
+              : 'Route rejected and returned to the host',
+        ),
       ),
     );
+    context.go('/admin-dashboard');
   }
 }
 
-class _Fact extends StatelessWidget {
-  const _Fact({required this.icon, required this.label, required this.value});
-
-  final String icon;
-  final String label;
-  final String value;
+class _RouteCard extends StatelessWidget {
+  const _RouteCard({required this.item});
+  final AdminApproval item;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => CloverCard(
+    radius: 20,
+    clip: true,
+    padding: EdgeInsets.zero,
+    child: Stack(
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 1),
-          child: PackIcon(icon, size: 18, color: CloverColors.orange),
+        const Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 6,
+          child: ColoredBox(color: CloverColors.orange),
         ),
-        const SizedBox(width: 10),
-        Expanded(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 20, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: AppText.caption.copyWith(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                value,
-                style: AppText.cardTitle.copyWith(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Text(item.title, style: AppText.subtitle.copyWith(fontSize: 17)),
+              const SizedBox(height: 7),
+              Text(item.host, style: AppText.caption.copyWith(fontSize: 11.5)),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _Fact(
+                      icon: PackIcons.pin,
+                      label: 'MEET POINT',
+                      value: item.meetingPoint,
+                    ),
+                  ),
+                  Expanded(
+                    child: _Fact(
+                      icon: PackIcons.clock,
+                      label: 'TIME',
+                      value: item.schedule,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact({required this.icon, required this.label, required this.value});
+  final String icon;
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(top: 1),
+        child: PackIcon(icon, size: 18, color: CloverColors.orange),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: AppText.caption.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: .5,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              value,
+              style: AppText.cardTitle.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class _CheckRow extends StatelessWidget {
   const _CheckRow({required this.label, required this.passed});
-
   final String label;
   final bool passed;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: CloverColors.white,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: CloverColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: passed ? CloverColors.greenTint : CloverColors.orangeTint,
-              shape: BoxShape.circle,
-            ),
-            child: PackIcon(
-              passed ? PackIcons.check : PackIcons.info,
-              size: 13,
-              color: passed ? CloverColors.green : CloverColors.orangeDark,
-            ),
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 44),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: CloverColors.white,
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(color: CloverColors.border),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: passed ? CloverColors.greenTint : CloverColors.orangeTint,
+            shape: BoxShape.circle,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: AppText.pill.copyWith(
-                fontSize: 12.5,
-                fontWeight: passed ? FontWeight.w600 : FontWeight.w700,
-                color: passed ? CloverColors.ink : CloverColors.orangeDark,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+          child: PackIcon(
+            passed ? PackIcons.check : PackIcons.info,
+            size: 13,
+            color: passed ? CloverColors.green : CloverColors.orangeDark,
           ),
-        ],
-      ),
-    );
-  }
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(label, style: AppText.bodyStrong.copyWith(fontSize: 12)),
+        ),
+      ],
+    ),
+  );
 }

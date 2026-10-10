@@ -14,8 +14,15 @@ import '../../widgets/pack_icon.dart';
 
 /// 21 Host Dashboard — requests, sessions and the way to create another route.
 /// The ink header carries the host's standing; the body is the work to do.
-class HostDashboardScreen extends StatelessWidget {
+class HostDashboardScreen extends StatefulWidget {
   const HostDashboardScreen({super.key});
+
+  @override
+  State<HostDashboardScreen> createState() => _HostDashboardScreenState();
+}
+
+class _HostDashboardScreenState extends State<HostDashboardScreen> {
+  String? _paymentDecision;
 
   static const _requests = [
     ('Aoife K.', 'AK', 'Morning Route · age 29'),
@@ -82,12 +89,150 @@ class HostDashboardScreen extends StatelessWidget {
                       onTap: () => context.push('/manage-route'),
                     ),
                   ),
+                const Gap(20),
+                SectionHeader(
+                  title: 'Payments',
+                  action: 'Payment history',
+                  onAction: () => context.push('/payment-history'),
+                ),
+                const Gap(12),
+                const _PaymentSummary(),
+                const Gap(12),
+                _PaymentConfirmationCard(
+                  decision: _paymentDecision,
+                  onConfirm: () =>
+                      setState(() => _paymentDecision = 'Paid to Host'),
+                  onReject: () => setState(
+                    () => _paymentDecision = 'Payment Not Confirmed',
+                  ),
+                ),
                 const Gap(12),
                 _CreateAction(onTap: () => context.push('/create-route')),
               ],
             ),
           ),
           const CloverNavBar(active: NavTab.routes),
+        ],
+      ),
+    );
+  }
+}
+
+/// Keeps direct collections distinct from the money Clover Move has processed.
+class _PaymentSummary extends StatelessWidget {
+  const _PaymentSummary();
+
+  @override
+  Widget build(BuildContext context) {
+    return CloverCard(
+      radius: 18,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: const [
+          _PaymentMetric(
+            label: 'Event revenue',
+            value: '€860.00',
+            meta: 'Reported as received from participants',
+          ),
+          Divider(height: 24),
+          _PaymentMetric(
+            label: 'Processed by Clover Move',
+            value: '€120.00',
+            meta: 'Official payments only',
+          ),
+          Divider(height: 24),
+          _PaymentMetric(
+            label: 'Received directly',
+            value: '€740.00',
+            meta: 'Paid to host or organiser',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentMetric extends StatelessWidget {
+  const _PaymentMetric({
+    required this.label,
+    required this.value,
+    required this.meta,
+  });
+
+  final String label;
+  final String value;
+  final String meta;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: AppText.cardTitle.copyWith(fontSize: 13.5)),
+              const SizedBox(height: 3),
+              Text(meta, style: AppText.caption.copyWith(fontSize: 10.5)),
+            ],
+          ),
+        ),
+        Text(
+          value,
+          style: AppText.cardTitle.copyWith(color: CloverColors.green),
+        ),
+      ],
+    );
+  }
+}
+
+class _PaymentConfirmationCard extends StatelessWidget {
+  const _PaymentConfirmationCard({
+    required this.decision,
+    required this.onConfirm,
+    required this.onReject,
+  });
+
+  final String? decision;
+  final VoidCallback onConfirm;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = decision != null;
+    return CloverCard(
+      radius: 18,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            resolved ? decision! : 'Payment confirmation requested',
+            style: AppText.cardTitle.copyWith(fontSize: 14),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            resolved
+                ? 'Payment Confirmed · Aoife K. will see “Paid to Host” in her payment history.'
+                : 'Aoife K. · Howth Cliff Walk · €10.00 · participant selected “I Have Paid the Host”.',
+            style: AppText.caption.copyWith(fontSize: 11),
+          ),
+          if (!resolved) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                PillButton(label: 'Confirm Payment', onPressed: onConfirm),
+                const SizedBox(width: 10),
+                PillButton(
+                  label: 'Not Confirmed',
+                  onPressed: onReject,
+                  colour: CloverColors.white,
+                  textColour: CloverColors.inkSoft,
+                  border: true,
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

@@ -138,16 +138,17 @@ class PartnerVenueScreen extends StatelessWidget {
           StickyBar(
             child: Row(
               children: [
-                SizedBox(
-                  width: 110,
+                Expanded(
+                  flex: 4,
                   child: SecondaryButton(
-                    icon: PackIcons.share,
+                    icon: PackIcons.mail,
                     label: 'Enquire',
                     onPressed: () {},
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
+                  flex: 6,
                   child: PrimaryButton(
                     label: 'Set as Meet Point',
                     color: CloverColors.orange,

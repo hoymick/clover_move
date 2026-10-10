@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
+import '../../state/app_state.dart';
 import '../../theme/pack_icons.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
@@ -9,42 +11,42 @@ import '../../widgets/chips.dart';
 import '../../widgets/headers.dart';
 import '../../widgets/pack_icon.dart';
 import '../../widgets/scaffolds.dart';
+import 'admin_workspace_screen.dart';
 
 /// 20 Admin Dashboard — route and business approvals. Every pending item shows
 /// Approve, Reject and View together, so nothing is decided without a way in.
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});
 
-  static const _pending = [
-    ('Morning Route', 'Niamh L. · Talbot Hotel · Orange', CloverColors.orange),
-    ('Bray Cliff Walk', 'Declan F. · Public · Green', CloverColors.green),
-    ('Sunday Spin · Wicklow Gap', 'Cycling Club · White', Color(0xFF8C9A93)),
-  ];
-
   static const _management = [
-    ('Users', PackIcons.people),
-    ('Businesses', PackIcons.grid),
-    ('Routes & events', PackIcons.pin),
-    ('Ireland locations', PackIcons.pin),
-    ('Smart Jerseys', PackIcons.shieldCheck),
-    ('Payments', PackIcons.card),
-    ('Media library', PackIcons.video),
-    ('Analytics', PackIcons.chart),
+    ('Users', PackIcons.people, AdminManagementSection.members),
+    ('Businesses', PackIcons.grid, AdminManagementSection.members),
+    ('Routes & events', PackIcons.pin, AdminManagementSection.content),
+    ('Ireland locations', PackIcons.pin, AdminManagementSection.operations),
+    ('Smart Jerseys', PackIcons.shieldCheck, AdminManagementSection.operations),
+    ('Payments', PackIcons.card, AdminManagementSection.payments),
+    ('Media library', PackIcons.video, AdminManagementSection.operations),
+    ('Analytics', PackIcons.chart, AdminManagementSection.operations),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    if (!state.adminPreviewActive) return const AdminAccessScreen();
+    final pending = state.pendingApprovals;
     return Scaffold(
       backgroundColor: CloverColors.surfaceMuted,
       body: Column(
         children: [
-          const ColoredBox(
+          ColoredBox(
             color: CloverColors.white,
             child: SafeArea(
               bottom: false,
               child: TitleHeader(
                 title: 'Admin',
                 subtitle: 'Clover Move Ireland',
+                action: 'Sign out',
+                onAction: () => context.read<AppState>().leaveAdminPreview(),
               ),
             ),
           ),
@@ -57,11 +59,11 @@ class AdminDashboardScreen extends StatelessWidget {
                 24,
               ),
               children: [
-                const Row(
+                Row(
                   children: [
                     Expanded(
                       child: _Stat(
-                        value: '18',
+                        value: '${pending.length}',
                         label: 'Pending',
                         colour: CloverColors.orange,
                       ),
@@ -69,7 +71,8 @@ class AdminDashboardScreen extends StatelessWidget {
                     SizedBox(width: 10),
                     Expanded(
                       child: _Stat(
-                        value: '1,204',
+                        value:
+                            '${state.approvals.where((item) => item.status == AdminApprovalStatus.approved).length + 1204}',
                         label: 'Routes',
                         colour: CloverColors.green,
                       ),
@@ -77,7 +80,7 @@ class AdminDashboardScreen extends StatelessWidget {
                     SizedBox(width: 10),
                     Expanded(
                       child: _Stat(
-                        value: '386',
+                        value: '${state.members.length}',
                         label: 'Partners',
                         colour: Color(0xFF5A6B63),
                       ),
@@ -90,20 +93,40 @@ class AdminDashboardScreen extends StatelessWidget {
                     Expanded(
                       child: Text('Awaiting approval', style: AppText.section),
                     ),
-                    Text('18', style: AppText.link),
+                    Text('${pending.length}', style: AppText.link),
                   ],
                 ),
                 const Gap(12),
-                for (final (title, meta, colour) in _pending)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _PendingCard(
-                      title: title,
-                      meta: meta,
-                      colour: colour,
-                      onView: () => context.push('/admin-review'),
+                if (pending.isEmpty)
+                  const _EmptyApprovals()
+                else
+                  for (var index = 0; index < pending.length; index++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _PendingCard(
+                        title: pending[index].title,
+                        meta:
+                            '${pending[index].host} · ${pending[index].meetingPoint}',
+                        colour: index.isEven
+                            ? CloverColors.orange
+                            : CloverColors.green,
+                        onApprove: () =>
+                            context.read<AppState>().decideApproval(
+                              pending[index].id,
+                              AdminApprovalStatus.approved,
+                            ),
+                        onReject: () => context.read<AppState>().decideApproval(
+                          pending[index].id,
+                          AdminApprovalStatus.rejected,
+                        ),
+                        onView: () {
+                          context.read<AppState>().selectApproval(
+                            pending[index].id,
+                          );
+                          context.push('/admin-review');
+                        },
+                      ),
                     ),
-                  ),
                 const Gap(12),
                 Text('Payment oversight', style: AppText.section),
                 const Gap(12),
@@ -140,6 +163,8 @@ class AdminDashboardScreen extends StatelessWidget {
                           child: _ManageTile(
                             label: _management[i].$1,
                             icon: _management[i].$2,
+                            onTap: () =>
+                                _openManagement(context, _management[i].$3),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -147,6 +172,8 @@ class AdminDashboardScreen extends StatelessWidget {
                           child: _ManageTile(
                             label: _management[i + 1].$1,
                             icon: _management[i + 1].$2,
+                            onTap: () =>
+                                _openManagement(context, _management[i + 1].$3),
                           ),
                         ),
                       ],
@@ -159,6 +186,31 @@ class AdminDashboardScreen extends StatelessWidget {
       ),
     );
   }
+
+  void _openManagement(BuildContext context, AdminManagementSection section) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AdminManagementScreen(section: section),
+      ),
+    );
+  }
+}
+
+class _EmptyApprovals extends StatelessWidget {
+  const _EmptyApprovals();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: CloverColors.greenTint,
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Text(
+      'You are all caught up. There are no routes waiting for a decision.',
+      style: AppText.bodyStrong.copyWith(fontSize: 13),
+    ),
+  );
 }
 
 class _PaymentStat extends StatelessWidget {
@@ -243,12 +295,16 @@ class _PendingCard extends StatelessWidget {
     required this.title,
     required this.meta,
     required this.colour,
+    required this.onApprove,
+    required this.onReject,
     required this.onView,
   });
 
   final String title;
   final String meta;
   final Color colour;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
   final VoidCallback onView;
 
   @override
@@ -296,7 +352,7 @@ class _PendingCard extends StatelessWidget {
                       label: 'Approve',
                       height: 30,
                       fontSize: 12,
-                      onPressed: () {},
+                      onPressed: onApprove,
                     ),
                     PillButton(
                       label: 'Reject',
@@ -305,7 +361,7 @@ class _PendingCard extends StatelessWidget {
                       colour: CloverColors.white,
                       textColour: CloverColors.inkSoft,
                       border: true,
-                      onPressed: () {},
+                      onPressed: onReject,
                     ),
                     PillButton(
                       label: 'View',
@@ -328,16 +384,21 @@ class _PendingCard extends StatelessWidget {
 }
 
 class _ManageTile extends StatelessWidget {
-  const _ManageTile({required this.label, required this.icon});
+  const _ManageTile({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   final String label;
   final String icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return CloverCard(
       radius: 18,
-      onTap: () {},
+      onTap: onTap,
       padding: const EdgeInsets.all(16),
       child: SizedBox(
         height: 34,
